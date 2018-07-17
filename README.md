@@ -6,6 +6,7 @@ I got useful information from [Tomáš blog](http://blog.sourcepole.ch/2012/06/0
 ## Usage 
 Create a finite FSM. Here is FSM `./fsm_example/fsm_example.dia` used as example for `dia_fsm_c_code_generation` plugin
 
+<img src="https://raw.githubusercontent.com/Lahorde/dia_fsm_c_code_generation/master/fsm_example/fsm_example.png" width="1200">
 
     # Clone this repo to Dia user python files
     git clone https://sourceforge.net/projects/dia-installer/ ~/.dia/python
