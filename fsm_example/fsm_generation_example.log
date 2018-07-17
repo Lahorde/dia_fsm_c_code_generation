@@ -1,0 +1,31 @@
+ *** enter fsm state code generation example ***
+
+enter IDLE state
+exit IDLE state
+preparing_connecton
+enter DISCONNECTED state
+is_connection_speed_ok() called
+is_server_ready() called
+exit DISCONNECTED state
+enter CONNECTED state
+polling server
+alive
+alive
+alive
+alive
+alive
+exit CONNECTED state
+enter DISCONNECTED state
+is_locked() called
+is_connection_speed_ok() called
+is_server_ready() called
+exit DISCONNECTED state
+enter CONNECTED state
+polling server
+alive
+exit CONNECTED state
+bye bye
+enter IDLE state
+
+ *** exit fsm state code generation example ***
+
