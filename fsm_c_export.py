@@ -107,7 +107,6 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
     def end_render(self) :
         f = open(self.filename, "a+")
         file_content = f.read()
-        print(file_content)
 
         fsm_vars = "static FSMState state;\n"
         triggers = "typedef enum\n{\n"
