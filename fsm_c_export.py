@@ -20,7 +20,11 @@
   work.  If not, see <http://creativecommons.org/licenses/by-nc/3.0/>.
 '''
 import dia
+import os
+import re
+import sys
 import uml_stm_export
+import shutil
 from datetime import datetime
 
 class CFSMExporter(uml_stm_export.SimpleSTM):
@@ -31,7 +35,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
 
     CODE_PREAMBLE = \
         "/******************************************************************************\n" + \
-        "* @file    fsm_example.c\n"                                                        + \
+        "* @file    {fsm_filename}\n"                                                  + \
         "* @author  Rémi Pincent - INRIA\n"                                                 + \
         "* @date    {}\n".format(datetime.now().strftime('%d/%m/%Y'))                       + \
         "*\n"                                                                               + \
@@ -54,7 +58,8 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
         "/***************************************************************************\n"    + \
         "* Include Files/\n"                                                                + \
         "***************************************************************************/\n"    + \
-        "#include \"fsm.h\"\n\n"
+        "{headers}\n"                                                            
+
 
     CONST_DEFS = \
         "/***************************************************************************\n" + \
@@ -74,6 +79,11 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
     STATIC_FUNCS_DECLS = \
         "/***************************************************************************\n" + \
         "* Local Functions Declarations                                              \n" + \
+        "***************************************************************************/\n"
+
+    GLOBAL_FUNCS_DECLS = \
+        "/***************************************************************************\n" + \
+        "* Global Functions Declarations                                              \n" + \
         "***************************************************************************/\n"
     
     GLOBAL_FUNCS_DEFS = \
@@ -96,31 +106,62 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
         "* FSM guards  \n" + \
         "**************/\n"   
 
+    HEADER_DEF_BEGIN = \
+        "#ifndef {fsm_name}_FSM_H\n"      + \
+        "#define {fsm_name}_FSM_H\n"      + \
+        "\n"                              + \
+        "#ifdef __cplusplus\n"            + \
+        "extern \"C\"\n"                  + \
+        "{{\n"                            + \
+        "#endif\n"
+
+    HEADER_DEF_END = \
+        "#ifdef __cplusplus\n"      + \
+        "}}\n"                      + \
+        "#endif\n"                  + \
+        "\n"                        + \
+        "#endif /* {fsm_name}_FSM_H */"
+
     def __init__(self):
         uml_stm_export.SimpleSTM.__init__(self)
-        self.filename = ""
+        self.src_filename = ""
+        self.consts = "#define NB_TRANSITIONS ({}U)\n\n"
+        self.static_vars = "static FSMState state;\n"
+        self.triggers_enum = "typedef enum\n{\n"
+        self.transitions_def = "static FSMTransition fsm_transitions[NB_TRANSITIONS] = {0};\n"
+        self.transitions_init = "    /** Initialize transitions - cannot be done statically (non const states) */\n"
+        self.global_func_decl = "void {fsm_name_lower}_fsm_init(void);\n\nvoid {fsm_name_lower}_fsm_update_on_trigger({fsm_name_capitalized}Trigger);\n\nvoid {fsm_name_lower}_fsm_update(void);\n\n"
+        self.init_func_def = "void\n{}_fsm_init(void)\n{{\n{}{}}}\n\n"
+        self.update_fsm_func_def = "void\n{fsm_name_lower}_fsm_update_on_trigger({fsm_name_capitalized}Trigger trigger)\n{{\n    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, trigger);\n}}\n\nvoid\n{fsm_name_lower}_fsm_update(void)\n{{\n    fsm_update_fsm(state);\n}}\n\n"
+        self.state_init = ""
+        self.guard_decls = self.FSM_GUARDS_DEFS
+        self.guard_defs = self.FSM_GUARDS_DEFS
+        self.action_decls = self.FSM_ACTIONS_DEFS
+        self.action_defs = self.FSM_ACTIONS_DEFS
+        self.state_enum = "typedef enum\n{\n"
 
-    def begin_render (self, data, filename):
-        self.filename = filename
+    def begin_render (self, data, src_filename):
+        self.src_filename = src_filename
+        self.header_filename = "{}.h".format(os.path.splitext(self.src_filename)[0])
+        r = re.search("(.+)_fsm.c", os.path.basename(self.src_filename))
+        if r :
+            self.fsm_name = r.groups()[0]
+        else :
+            print("bad src_filename given - cannot get fsm name")
+            self.fsm_name = ""
+        self.global_func_decl = self.global_func_decl.format(fsm_name_lower = self.fsm_name.lower(), fsm_name_capitalized = self.fsm_name.capitalize())
+        self.update_fsm_func_def = self.update_fsm_func_def.format(fsm_name_lower = self.fsm_name.lower(), fsm_name_capitalized = self.fsm_name.capitalize())
+
         uml_stm_export.SimpleSTM.parse(self, data)
+        script_path = os.path.dirname(os.path.realpath(__file__))
+        
+        # copy fsm lib to generated fsm folder
+        fsm_dest_lib_path = "{}/fsm".format(os.path.dirname(self.src_filename))
+        if os.path.isdir(fsm_dest_lib_path) :
+            shutil.rmtree(fsm_dest_lib_path)
+        shutil.copytree("{}/fsm_c_lib".format(script_path), fsm_dest_lib_path)
                    
     def end_render(self) :
-        f = open(self.filename, "a+")
-        file_content = f.read()
-
-        fsm_vars = "static FSMState state;\n"
-        triggers = "typedef enum\n{\n"
-        transitions = "static FSMTransition fsm_transitions[NB_TRANSITIONS] = {0};\n"
-        transitions_init = "    /** Initialize transitions - cannot be done statically (non const states) */\n"
-        init_func_decl = "static void init_fsm(void);\n\n"
-        init_func_def = "void init_fsm(void)\n{{\n{}\n\n{}}}\n\n"
-        state_init = ""
-        guard_decls = self.FSM_GUARDS_DEFS
-        guard_defs = self.FSM_GUARDS_DEFS
-        action_decls = self.FSM_ACTIONS_DEFS
-        action_defs = self.FSM_ACTIONS_DEFS
-        consts = "#define NB_TRANSITIONS ({}U)\n\n"
-
         trans_id = 0
         for i, transition in enumerate(self.transitions) :
             if transition.source == "INITIAL_STATE" :
@@ -134,152 +175,221 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
                 if len(self.states[transition.target].iaction.strip()) > 0 :
                     init_body = "{}    {};\n".format(init_body, self.states[transition.target].iaction)
                 # set initial state
-                state_init = "{}    state = {}_STATE;\n".format(init_body, self.states[transition.target].name)
+                self.state_init = "{}    state = {}_STATE;\n".format(init_body, self.states[transition.target].name)
 
             splitted_trig = ""
             if len(transition.trigger) > 0 :
                 splitted_trig = transition.trigger.split(",")
                 splitted_trig = [trig.strip() for trig in splitted_trig]
                 for trig in splitted_trig :
-                    if " {}".format(trig) not in triggers :
+                    if " {}".format(trig) not in self.triggers_enum :
                         if i != 0 :
-                            triggers = "{},\n".format(triggers)
-                        triggers = "{}    {}".format(triggers, trig.strip())
+                            self.triggers_enum = "{},\n".format(self.triggers_enum)
+                        self.triggers_enum = "{}    {}".format(self.triggers_enum, trig.strip())
 
             trans_ref = "NULL"
             if len(transition.guard) > 0 :
-                guard_decls = "{}static bool guard_{}(void);\n".format(guard_decls, i)
-                guard_defs = "{}inline bool guard_{}(void)\n{{\n    return {};\n}}\n\n".format(guard_defs, 
+                guard_body = "{{\n    return {};\n}}".format(transition.guard)
+                func_name = CFSMExporter._guard_already_defined(guard_body, self.guard_defs)
+                if func_name :
+                    trans_ref = "&{}".format(func_name)
+                else :
+                    self.guard_decls = "{}static bool guard_{}(void);\n".format(self.guard_decls, i)
+                    self.guard_defs = "{}bool\nguard_{}(void)\n{}\n\n".format(self.guard_defs, 
                     i,
-                    transition.guard)
-                trans_ref = "&guard_{}".format(i)
+                    guard_body)
+                    trans_ref = "&guard_{}".format(i)
 
             action_trans_ref = "NULL"
-            state_action_decls, state_action_defs, action_trans_ref = self._generate_state_actions(i, transition.action, "action_trans")
-            action_decls = "{}{}".format(action_decls, state_action_decls)
-            action_defs = "{}{}".format(action_defs, state_action_defs)
+            trans_action_decl, trans_action_def, trans_action_ref = self._generate_function("void", "action_trans_{}".format(i), "void", transition.action)
+
+            func_name = CFSMExporter._trans_action_already_defined(trans_action_def, self.action_defs)
+            if func_name :
+                trans_action_ref = "&{}".format(func_name)
+            else :
+                self.action_decls = "{}{}".format(self.action_decls, trans_action_decl)
+                self.action_defs = "{}{}".format(self.action_defs, trans_action_def)
 
             for trig in splitted_trig :
-                transitions_init = "{}    fsm_transitions[{}].curr_state = {}_STATE;\n".format(
-                    transitions_init,
+                self.transitions_init = "{}    fsm_transitions[{}].curr_state = {}_STATE;\n".format(
+                    self.transitions_init,
                     trans_id,
                     transition.source)
-                transitions_init = "{}    fsm_transitions[{}].next_state = {}_STATE;\n".format(
-                    transitions_init,
+                self.transitions_init = "{}    fsm_transitions[{}].next_state = {}_STATE;\n".format(
+                    self.transitions_init,
                     trans_id,
                     transition.target)
-                transitions_init = "{}    fsm_transitions[{}].trigger = {};\n".format(
-                    transitions_init,
+                self.transitions_init = "{}    fsm_transitions[{}].trigger = {};\n".format(
+                    self.transitions_init,
                     trans_id,
                     trig)
-                transitions_init = "{}    fsm_transitions[{}].guard = {};\n".format(
-                    transitions_init,
+                self.transitions_init = "{}    fsm_transitions[{}].guard = {};\n".format(
+                    self.transitions_init,
                     trans_id,
                     trans_ref)
-                transitions_init = "{}    fsm_transitions[{}].trans_action = {};\n\n".format(
-                    transitions_init,
+                self.transitions_init = "{}    fsm_transitions[{}].trans_action = {};\n\n".format(
+                    self.transitions_init,
                     trans_id,
-                    action_trans_ref)
+                    trans_action_ref)
                 trans_id += 1
 
-        consts = consts.format(trans_id)
-        init_func_def = init_func_def.format(transitions_init, state_init)
-        triggers = "{}\n}}Trigger;\n".format(triggers)
+        self.consts = self.consts.format(trans_id)
+        self.init_func_def = self.init_func_def.format(self.fsm_name.lower(), self.transitions_init, self.state_init)
+        self.triggers_enum = "{}\n}}{}Trigger;\n".format(self.triggers_enum, self.fsm_name.capitalize())
 
-        state_enum = "typedef enum\n{\n"
-        states_var = ""
         for i, key in enumerate(self.states.keys()) :
             if len(key) == 0 :
                 continue
             if i != 0 :
-                state_enum = "{},\n".format(state_enum)
-            state_enum = "{}    {}".format(state_enum, key)
+                self.state_enum = "{},\n".format(self.state_enum)
+            self.state_enum = "{}    {}".format(self.state_enum, key)
             action_enter_ref = "NULL"
             action_exit_ref = "NULL"
             action_in_ref = "NULL"
 
-            state_action_decls, state_action_defs, action_enter_ref = self._generate_state_actions("{}_state".format(key.lower()), self.states[key].iaction, "action_enter")
-            action_decls = "{}{}".format(action_decls, state_action_decls)
-            action_defs = "{}{}".format(action_defs, state_action_defs)
+            state_action_decl, state_action_def, action_enter_ref = self._generate_function("void", "action_enter_{}_state".format(key.lower()), "void", self.states[key].iaction)
+            self.action_decls = "{}{}".format(self.action_decls, state_action_decl)
+            self.action_defs = "{}{}".format(self.action_defs, state_action_def)
 
-            state_action_decls, state_action_defs, action_exit_ref = self._generate_state_actions("{}_state".format(key.lower()), self.states[key].oaction, "action_exit")
-            action_decls = "{}{}".format(action_decls, state_action_decls)
-            action_defs = "{}{}".format(action_defs, state_action_defs)
+            state_action_decl, state_action_def, action_exit_ref = self._generate_function("void", "action_exit_{}_state".format(key.lower()), "void", self.states[key].oaction)
+            self.action_decls = "{}{}".format(self.action_decls, state_action_decl)
+            self.action_defs = "{}{}".format(self.action_defs, state_action_def)
 
-            state_action_decls, state_action_defs, action_in_ref = self._generate_state_actions("{}_state".format(key.lower()), self.states[key].doaction, "action_in")
-            action_decls = "{}{}".format(action_decls, state_action_decls)
-            action_defs = "{}{}".format(action_defs, state_action_defs)
+            state_action_decl, state_action_def, action_in_ref = self._generate_function("void", "action_in_{}_state".format(key.lower()), "void", self.states[key].doaction)
+            self.action_decls = "{}{}".format(self.action_decls, state_action_decl)
+            self.action_defs = "{}{}".format(self.action_defs, state_action_def)
 
-            states_var = "{}static const FSMState {}_STATE = \n{{\n    {},\n    {},\n    {},\n    {},\n}};\n\n".format(
-                states_var, 
+            self.static_vars = "{}static const FSMState {}_STATE = \n{{\n    {},\n    {},\n    {},\n    {},\n}};\n\n".format(
+                self.static_vars,
                 key, 
                 key, 
                 action_enter_ref,
                 action_exit_ref,
                 action_in_ref)
 
-        state_enum = "{}\n}}State;\n".format(state_enum)
+        self.state_enum = "{}\n}}{}State;\n".format(self.state_enum, self.fsm_name.capitalize())
 
+        self._write_c_file()
+        self._write_h_file()
+
+        self.states = {}
+        self.transitions = []
+
+
+    def _write_c_file(self) :
+        f = open(self.src_filename, "a+")
+
+        file_content = f.read()
         user_includes = CFSMExporter._get_user_code(file_content, "Includes")
         user_consts = CFSMExporter._get_user_code(file_content, "Consts")
         user_types = CFSMExporter._get_user_code(file_content, "Types")
-        user_static_vars_decls = CFSMExporter._get_user_code(file_content, "User Static Variables Declarations")
+        user_static_vars = CFSMExporter._get_user_code(file_content, "User Static Variables Declarations")
         user_local_fcts_decls = CFSMExporter._get_user_code(file_content, "User Local Functions Declarations")
         user_global_fcts_defs = CFSMExporter._get_user_code(file_content, "User Global Functions Definitions")
         user_static_fcts_defs = CFSMExporter._get_user_code(file_content, "User Static Functions Definitions")
 
         f.truncate(0)
-        f.write(self.CODE_PREAMBLE)
+        f.write(self.CODE_PREAMBLE.format(
+            fsm_filename = os.path.basename(self.src_filename), 
+            headers = "#include \"fsm.h\"\n#include \"{}\"\n".format(os.path.basename(self.header_filename))))
         f.write(user_includes)
         f.write(self.CONST_DEFS)
-        f.write(consts)
+        f.write(self.consts)
         f.write(user_consts)        
         f.write(self.TYPE_DEFS)
-        f.write(state_enum)
-        f.write("\n{}\n".format(triggers))
+        f.write(self.state_enum)
         f.write(user_types)
         f.write(self.STATIC_FUNCS_DECLS)
-        f.write(init_func_decl);
-        f.write("{}\n".format(action_decls))
-        f.write("{}\n".format(guard_decls))
+        f.write("{}\n".format(self.action_decls))
+        f.write("{}\n".format(self.guard_decls))
         f.write(user_local_fcts_decls)
         f.write(self.STATIC_VARS)
-        f.write(fsm_vars);
-        f.write(states_var)
-        f.write("{}\n".format(transitions))
-        f.write(user_static_vars_decls)
+        f.write(self.static_vars);
+        f.write("{}\n".format(self.transitions_def))
+        f.write(user_static_vars)
         f.write(self.GLOBAL_FUNCS_DEFS)
         f.write("{}\n".format(user_global_fcts_defs))
+        f.write(self.init_func_def);
+        f.write(self.update_fsm_func_def)
         f.write(self.STATIC_FUNCS_DEFS)
-        f.write(init_func_def);
-        f.write(action_defs)
-        f.write(guard_defs)
+        f.write(self.action_defs)
+        f.write(self.guard_defs)
         f.write(user_static_fcts_defs)
 
         f.close()
-        self.states = {}
-        self.transitions = []
 
-    # generate enter, exit, in actions for a given state action
+    def _write_h_file(self) :
+        f = open(self.header_filename, "a+")
+        
+        file_content = f.read()
+        user_includes = CFSMExporter._get_user_code(file_content, "Includes")
+        user_consts = CFSMExporter._get_user_code(file_content, "Consts")
+        user_types = CFSMExporter._get_user_code(file_content, "Types")
+        user_static_vars = CFSMExporter._get_user_code(file_content, "User Static Variables Declarations")
+        user_local_fcts_decls = CFSMExporter._get_user_code(file_content, "User Local Functions Declarations")
+        user_global_fcts_defs = CFSMExporter._get_user_code(file_content, "User Global Functions Definitions")
+        user_static_fcts_defs = CFSMExporter._get_user_code(file_content, "User Static Functions Definitions")
+
+        f.truncate(0)
+        f.write(self.CODE_PREAMBLE.format(fsm_filename = os.path.basename(self.header_filename), headers = ""))
+        f.write(user_includes)
+        f.write(self.HEADER_DEF_BEGIN.format(fsm_name = self.fsm_name.upper()))
+        f.write(self.CONST_DEFS)
+        f.write(user_consts)        
+        f.write(self.TYPE_DEFS)
+        f.write("{}\n".format(self.triggers_enum))
+        f.write(user_types)
+        f.write(self.GLOBAL_FUNCS_DECLS)
+        f.write(self.global_func_decl);
+        f.write(self.HEADER_DEF_END.format(fsm_name = self.fsm_name.upper()))
+
+        f.close()        
+
+    # generate function declaration, definitions, reference
     # returns a tuple of (function_declarations, functions_definitions, state_reference_action)
     @staticmethod
-    def _generate_state_actions(state_name, state_action, action_name) :
+    def _generate_function(func_ret, func_name, func_args, body) :
         # reference on action function set in state variable
         ref_action = "NULL"
         action_decls = ""
         action_defs = ""
-        if len(state_action) > 0 :
-            splitted_actions = state_action.split(";")
+        if len(body) > 0 :
+            splitted_actions = body.split(";")
             splitted_actions = [action.strip() for action in splitted_actions]
-            # several function calls, group it in a "action_enter_the_state() method 
-            action_decls = "static void {}_{}(void);\n".format(action_name, state_name)
-            action_defs = "inline void {}_{}(void)\n{{\n".format(action_name, state_name)
+            # several function calls, group it in function body 
+            action_decls = "static {} {}({});\n".format(func_ret, func_name, func_args)
+            action_defs = "{}\n{}({})\n{{\n".format(func_ret, func_name, func_args)
             for action in splitted_actions :
                 if len(action) > 0 :
                     action_defs = "{}    {};\n".format(action_defs, action.strip())
             action_defs = "{}}}\n\n".format(action_defs)
-            ref_action = "&{}_{}".format(action_name, state_name)
+            ref_action = "&{}".format(func_name)
         return (action_decls, action_defs, ref_action)
+
+
+    @staticmethod
+    def _guard_already_defined(func_body, func_defs) :
+        if func_body in func_defs :
+            return re.findall("bool\n(guard_[0-9])\(void\)\n", func_defs[:func_defs.index(func_body)], re.DOTALL)[-1]
+        return None
+
+    @staticmethod
+    def _trans_action_already_defined(func_def, func_defs) :
+        return CFSMExporter._function_already_defined(func_def, func_defs, "void", "action_trans_[0-9]", "void")
+
+    # checks if a function with same definition but having a different name
+    # has already been defined in given function definitions
+    # returns 
+    @staticmethod
+    def _function_already_defined(func_def, func_defs, func_ret, func_name, func_params) :
+        # extract func body
+        ret = re.search("{}\n{}\({}\)\n({{\n.*\n}})".format(func_ret, func_name, func_params), func_def, re.DOTALL)
+        if ret :
+            func_body = ret.groups()[0]
+            if func_body in func_defs :
+                return re.findall("{}\n({})\({}\)\n".format(func_ret, func_name, func_params), func_defs[:func_defs.index(func_body)], re.DOTALL)[-1]
+        return None
+
 
     @staticmethod
     def _get_user_code(content, section_name) :

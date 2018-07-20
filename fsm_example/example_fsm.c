@@ -61,47 +61,6 @@ static bool is_locked(void);
 * Global Functions Definitions                                              
 ***************************************************************************/
 /** USER CODE BEGIN User Global Functions Definitions */
-int main(void)
-{
-    show_msg(" *** enter fsm state code generation example ***\n");
-    init_fsm();
-    /** this trigger must not cause any transition */
-    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, ON_CONNECT);
-    /** this trigger must not cause any transition */
-    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, ON_DISCONNECT);
-    for(uint8_t i = 0; i < 5; i++){
-        /** this update won't call any action */
-        fsm_update_fsm(state);
-    }
-    /** goes in DISCONNECT state */
-    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, CONNECT_BTN_PRESSED);
-    /** this update won't call any action */
-    fsm_update_fsm(state);
-    /** goes in CONNECT state */
-    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, ON_CONNECT);
-    for(uint8_t i = 0; i < 5; i++){
-        /** call CONNECTED state action */
-        fsm_update_fsm(state);
-    }
-    /** goes in DISCONNECT state */
-    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, ON_DISCONNECT);
-    /** this update won't call any action */
-    fsm_update_fsm(state);
-    /** this trigger must not cause any transition */
-    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, CONNECT_BTN_PRESSED);
-    /** this trigger must not cause any transition */
-    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, ON_DISCONNECT);
-    /** goes in CONNECT state */
-    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, ON_CONNECT);
-    /** call CONNECTED state action */
-    fsm_update_fsm(state);
-    /** goes in IDLE state */
-    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, SERVER_UNREACHABLE);
-    /** this update won't call any action */
-    fsm_update_fsm(state);
-    show_msg("\n *** exit fsm state code generation example ***\n");
-    return 0;
-}
 /** USER CODE END User Global Functions Definitions */
 
 /***************************************************************************
