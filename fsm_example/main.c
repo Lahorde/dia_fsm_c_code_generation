@@ -35,37 +35,37 @@ int main(void)
     printf(" *** enter fsm state code generation example ***\n\n");
     example_fsm_init();
     /** this trigger must not cause any transition */
-    example_fsm_update_on_trigger(ON_CONNECT);
+    example_fsm_update_on_trigger(ON_CONNECT_TRIG);
     /** this trigger must not cause any transition */
-    example_fsm_update_on_trigger(ON_DISCONNECT);
+    example_fsm_update_on_trigger(ON_DISCONNECT_TRIG);
     for(uint8_t i = 0; i < 5; i++){
         /** this update won't call any action */
         example_fsm_update();
     }
     /** goes in DISCONNECT state */
-    example_fsm_update_on_trigger(CONNECT_BTN_PRESSED);
+    example_fsm_update_on_trigger(CONNECT_BTN_PRESSED_TRIG);
     /** this update won't call any action */
     example_fsm_update();
     /** goes in CONNECT state */
-    example_fsm_update_on_trigger(ON_CONNECT);
+    example_fsm_update_on_trigger(ON_CONNECT_TRIG);
     for(uint8_t i = 0; i < 5; i++){
         /** call CONNECTED state action */
         example_fsm_update();
     }
     /** goes in DISCONNECT state */
-    example_fsm_update_on_trigger(ON_DISCONNECT);
+    example_fsm_update_on_trigger(ON_DISCONNECT_TRIG);
     /** this update won't call any action */
     example_fsm_update();
     /** this trigger must not cause any transition */
-    example_fsm_update_on_trigger(CONNECT_BTN_PRESSED);
+    example_fsm_update_on_trigger(CONNECT_BTN_PRESSED_TRIG);
     /** this trigger must not cause any transition */
-    example_fsm_update_on_trigger(ON_DISCONNECT);
+    example_fsm_update_on_trigger(ON_DISCONNECT_TRIG);
     /** goes in CONNECT state */
-    example_fsm_update_on_trigger(ON_CONNECT);
+    example_fsm_update_on_trigger(ON_CONNECT_TRIG);
     /** call CONNECTED state action */
     example_fsm_update();
     /** goes in IDLE state */
-    example_fsm_update_on_trigger(SERVER_UNREACHABLE);
+    example_fsm_update_on_trigger(SERVER_UNREACHABLE_TRIG);
     /** this update won't call any action */
     example_fsm_update();
     printf("\n *** exit fsm state code generation example ***\n\n");

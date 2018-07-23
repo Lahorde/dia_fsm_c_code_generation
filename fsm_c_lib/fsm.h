@@ -81,13 +81,13 @@ typedef struct
  * @param nb_transitions
  * @param trigger
  */
-void fsm_update_fsm_on_trigger(FSMState *state, FSMTransition transitions[], uint16_t nb_transitions, FSMStateTrigger trigger);
+void fsm_update_on_trigger(FSMState *state, FSMTransition transitions[], uint16_t nb_transitions, FSMStateTrigger trigger);
 
 /**
  * Update FSM in given state i.e. runs state "do action"
  * @param state
  */
-void fsm_update_fsm(FSMState state);
+void fsm_update(FSMState state);
 
 #ifdef __cplusplus
 }

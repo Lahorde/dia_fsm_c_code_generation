@@ -45,13 +45,19 @@ class Transition :
         self.target = state
 
     def set_action(self, action):
-        self.action = action
+        if action == "(NULL)":
+            self.iaction = ""
+        else :
+            self.iaction = action
 
     def set_trigger(self, trigger):
         self.trigger = trigger
 
     def set_guard(self, guard):
-        self.guard = guard
+        if guard == "(NULL)":
+            self.guard = ""
+        else :
+            self.guard = guard
 
 class State :
     def __init__(self) :

@@ -52,7 +52,7 @@
 /**************************************************************************
  * Global Functions Definitions
  **************************************************************************/
-void fsm_update_fsm_on_trigger(FSMState *state, FSMTransition transitions[], uint16_t nb_transitions, FSMStateTrigger trigger)
+void fsm_update_on_trigger(FSMState *state, FSMTransition transitions[], uint16_t nb_transitions, FSMStateTrigger trigger)
 {
     for(uint8_t i = 0; i < nb_transitions; i++)
     {
@@ -78,7 +78,7 @@ void fsm_update_fsm_on_trigger(FSMState *state, FSMTransition transitions[], uin
     }
 }
 
-void fsm_update_fsm(FSMState state)
+void fsm_update(FSMState state)
 {
     if(state.action_on_state)
     {

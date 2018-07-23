@@ -132,7 +132,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
         self.transitions_init = "    /** Initialize transitions - cannot be done statically (non const states) */\n"
         self.global_func_decl = "void {fsm_name_lower}_fsm_init(void);\n\nvoid {fsm_name_lower}_fsm_update_on_trigger({fsm_name_capitalized}Trigger);\n\nvoid {fsm_name_lower}_fsm_update(void);\n\n"
         self.init_func_def = "void\n{}_fsm_init(void)\n{{\n{}{}}}\n\n"
-        self.update_fsm_func_def = "void\n{fsm_name_lower}_fsm_update_on_trigger({fsm_name_capitalized}Trigger trigger)\n{{\n    fsm_update_fsm_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, trigger);\n}}\n\nvoid\n{fsm_name_lower}_fsm_update(void)\n{{\n    fsm_update_fsm(state);\n}}\n\n"
+        self.update_fsm_func_def = "void\n{fsm_name_lower}_fsm_update_on_trigger({fsm_name_capitalized}Trigger trigger)\n{{\n    fsm_update_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, trigger);\n}}\n\nvoid\n{fsm_name_lower}_fsm_update(void)\n{{\n    fsm_update(state);\n}}\n\n"
         self.state_init = ""
         self.guard_decls = self.FSM_GUARDS_DEFS
         self.guard_defs = self.FSM_GUARDS_DEFS
@@ -185,7 +185,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
                     if " {}".format(trig) not in self.triggers_enum :
                         if i != 0 :
                             self.triggers_enum = "{},\n".format(self.triggers_enum)
-                        self.triggers_enum = "{}    {}".format(self.triggers_enum, trig.strip())
+                        self.triggers_enum = "{}    {}_TRIG".format(self.triggers_enum, trig.strip())
 
             trans_ref = "NULL"
             if len(transition.guard) > 0 :
@@ -219,7 +219,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
                     self.transitions_init,
                     trans_id,
                     transition.target)
-                self.transitions_init = "{}    fsm_transitions[{}].trigger = {};\n".format(
+                self.transitions_init = "{}    fsm_transitions[{}].trigger = {}_TRIG;\n".format(
                     self.transitions_init,
                     trans_id,
                     trig)
@@ -291,7 +291,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
         f.truncate(0)
         f.write(self.CODE_PREAMBLE.format(
             fsm_filename = os.path.basename(self.src_filename), 
-            headers = "#include \"fsm.h\"\n#include \"{}\"\n".format(os.path.basename(self.header_filename))))
+            headers = "#include \"fsm.h\"\n#include \"{}\"\n#include <stddef.h>\n".format(os.path.basename(self.header_filename))))
         f.write(user_includes)
         f.write(self.CONST_DEFS)
         f.write(self.consts)
@@ -375,7 +375,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
 
     @staticmethod
     def _trans_action_already_defined(func_def, func_defs) :
-        return CFSMExporter._function_already_defined(func_def, func_defs, "void", "action_trans_[0-9]", "void")
+        return CFSMExporter._function_already_defined(func_def, func_defs, "void", "action_trans_[0-9]+", "void")
 
     # checks if a function with same definition but having a different name
     # has already been defined in given function definitions
