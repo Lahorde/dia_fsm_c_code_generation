@@ -26,7 +26,7 @@ import sys
 import uml_stm_export
 import shutil
 from datetime import datetime
-
+reload(uml_stm_export)
 class CFSMExporter(uml_stm_export.SimpleSTM):
     now = datetime.now()
 
@@ -54,10 +54,12 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
         "*\n"                                                                               + \
         "* You should have received a copy of the license along with this\n"                + \
         "* work.  If not, see <http://creativecommons.org/licenses/by-nc/3.0/>.\n"          + \
-        "*****************************************************************************/\n"  + \
+        "*****************************************************************************/\n"
+
+    INCLUDE_DEFS = \
         "/***************************************************************************\n"    + \
         "* Include Files/\n"                                                                + \
-        "***************************************************************************/\n"    + \
+        "***************************************************************************/\n"    +\
         "{headers}\n"                                                            
 
 
@@ -125,14 +127,14 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
     def __init__(self):
         uml_stm_export.SimpleSTM.__init__(self)
         self.src_filename = ""
-        self.consts = "#define NB_TRANSITIONS ({}U)\n\n"
+        self.consts = "#define NB_TRANSITIONS ({}U)\n"
         self.static_vars = "static FSMState state;\n"
         self.triggers_enum = "typedef enum\n{\n"
         self.transitions_def = "static FSMTransition fsm_transitions[NB_TRANSITIONS] = {0};\n"
         self.transitions_init = "    /** Initialize transitions - cannot be done statically (non const states) */\n"
-        self.global_func_decl = "void {fsm_name_lower}_fsm_init(void);\n\nvoid {fsm_name_lower}_fsm_update_on_trigger({fsm_name_capitalized}Trigger);\n\nvoid {fsm_name_lower}_fsm_update(void);\n\n"
+        self.global_func_decl = "void {fsm_name_lower}_fsm_init(void);\n\nvoid {fsm_name_lower}_fsm_update_on_trigger({fsm_type_name}Trigger);\n\nvoid {fsm_name_lower}_fsm_update(void);\n\n"
         self.init_func_def = "void\n{}_fsm_init(void)\n{{\n{}{}}}\n\n"
-        self.update_fsm_func_def = "void\n{fsm_name_lower}_fsm_update_on_trigger({fsm_name_capitalized}Trigger trigger)\n{{\n    fsm_update_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, trigger);\n}}\n\nvoid\n{fsm_name_lower}_fsm_update(void)\n{{\n    fsm_update(state);\n}}\n\n"
+        self.update_fsm_func_def = "void\n{fsm_name_lower}_fsm_update_on_trigger({fsm_type_name}Trigger trigger)\n{{\n    fsm_update_on_trigger(&state, fsm_transitions, NB_TRANSITIONS, trigger);\n}}\n\nvoid\n{fsm_name_lower}_fsm_update(void)\n{{\n    fsm_update(state);\n}}\n\n"
         self.state_init = ""
         self.guard_decls = self.FSM_GUARDS_DEFS
         self.guard_defs = self.FSM_GUARDS_DEFS
@@ -149,8 +151,8 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
         else :
             print("bad src_filename given - cannot get fsm name")
             self.fsm_name = ""
-        self.global_func_decl = self.global_func_decl.format(fsm_name_lower = self.fsm_name.lower(), fsm_name_capitalized = self.fsm_name.capitalize())
-        self.update_fsm_func_def = self.update_fsm_func_def.format(fsm_name_lower = self.fsm_name.lower(), fsm_name_capitalized = self.fsm_name.capitalize())
+        self.global_func_decl = self.global_func_decl.format(fsm_name_lower = self.fsm_name.lower(), fsm_type_name = CFSMExporter._convert_to_c_type_name(self.fsm_name))
+        self.update_fsm_func_def = self.update_fsm_func_def.format(fsm_name_lower = self.fsm_name.lower(), fsm_type_name = CFSMExporter._convert_to_c_type_name(self.fsm_name))
 
         uml_stm_export.SimpleSTM.parse(self, data)
         script_path = os.path.dirname(os.path.realpath(__file__))
@@ -235,7 +237,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
 
         self.consts = self.consts.format(trans_id)
         self.init_func_def = self.init_func_def.format(self.fsm_name.lower(), self.transitions_init, self.state_init)
-        self.triggers_enum = "{}\n}}{}Trigger;\n".format(self.triggers_enum, self.fsm_name.capitalize())
+        self.triggers_enum = "{}\n}}{}Trigger;\n".format(self.triggers_enum, CFSMExporter._convert_to_c_type_name(self.fsm_name))
 
         for i, key in enumerate(self.states.keys()) :
             if len(key) == 0 :
@@ -259,7 +261,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
             self.action_decls = "{}{}".format(self.action_decls, state_action_decl)
             self.action_defs = "{}{}".format(self.action_defs, state_action_def)
 
-            self.static_vars = "{}static const FSMState {}_STATE = \n{{\n    {},\n    {},\n    {},\n    {},\n}};\n\n".format(
+            self.static_vars = "{}static const FSMState {}_STATE = \n{{\n    {},\n    {},\n    {},\n    {},\n}};\n".format(
                 self.static_vars,
                 key, 
                 key, 
@@ -267,7 +269,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
                 action_exit_ref,
                 action_in_ref)
 
-        self.state_enum = "{}\n}}{}State;\n".format(self.state_enum, self.fsm_name.capitalize())
+        self.state_enum = "{}\n}}{}State;\n".format(self.state_enum, CFSMExporter._convert_to_c_type_name(self.fsm_name))
 
         self._write_c_file()
         self._write_h_file()
@@ -290,31 +292,38 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
 
         f.truncate(0)
         f.write(self.CODE_PREAMBLE.format(
-            fsm_filename = os.path.basename(self.src_filename), 
+            fsm_filename = os.path.basename(self.src_filename)))
+        f.write(self.INCLUDE_DEFS.format(
             headers = "#include \"fsm.h\"\n#include \"{}\"\n#include <stddef.h>\n".format(os.path.basename(self.header_filename))))
         f.write(user_includes)
+
         f.write(self.CONST_DEFS)
-        f.write(self.consts)
-        f.write(user_consts)        
+        f.write("{}\n".format(self.consts))
+        f.write(user_consts)   
+
         f.write(self.TYPE_DEFS)
         f.write(self.state_enum)
-        f.write(user_types)
+        f.write("\n{}".format(user_types))
+
         f.write(self.STATIC_FUNCS_DECLS)
-        f.write("{}\n".format(self.action_decls))
-        f.write("{}\n".format(self.guard_decls))
-        f.write(user_local_fcts_decls)
+        f.write(self.action_decls)
+        f.write("\n{}".format(self.guard_decls))
+        f.write("\n{}".format(user_local_fcts_decls))
+
         f.write(self.STATIC_VARS)
         f.write(self.static_vars);
-        f.write("{}\n".format(self.transitions_def))
-        f.write(user_static_vars)
+        f.write("\n{}".format(self.transitions_def))
+        f.write("\n{}".format(user_static_vars))
+
         f.write(self.GLOBAL_FUNCS_DEFS)
-        f.write("{}\n".format(user_global_fcts_defs))
-        f.write(self.init_func_def);
-        f.write(self.update_fsm_func_def)
+        f.write(self.init_func_def)
+        f.write("\n{}".format(self.update_fsm_func_def))
+        f.write("\n{}".format(user_global_fcts_defs))
+
         f.write(self.STATIC_FUNCS_DEFS)
         f.write(self.action_defs)
-        f.write(self.guard_defs)
-        f.write(user_static_fcts_defs)
+        f.write("\n{}".format(self.guard_defs))
+        f.write("\n{}".format(user_static_fcts_defs))
 
         f.close()
 
@@ -325,25 +334,43 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
         user_includes = CFSMExporter._get_user_code(file_content, "Includes")
         user_consts = CFSMExporter._get_user_code(file_content, "Consts")
         user_types = CFSMExporter._get_user_code(file_content, "Types")
-        user_static_vars = CFSMExporter._get_user_code(file_content, "User Static Variables Declarations")
-        user_local_fcts_decls = CFSMExporter._get_user_code(file_content, "User Local Functions Declarations")
-        user_global_fcts_defs = CFSMExporter._get_user_code(file_content, "User Global Functions Definitions")
-        user_static_fcts_defs = CFSMExporter._get_user_code(file_content, "User Static Functions Definitions")
+        user_global_fcts_defs = CFSMExporter._get_user_code(file_content, "User Global Functions Declarations")
 
         f.truncate(0)
-        f.write(self.CODE_PREAMBLE.format(fsm_filename = os.path.basename(self.header_filename), headers = ""))
-        f.write(user_includes)
+        f.write(self.CODE_PREAMBLE.format(fsm_filename = os.path.basename(self.header_filename)))
         f.write(self.HEADER_DEF_BEGIN.format(fsm_name = self.fsm_name.upper()))
+        f.write(self.INCLUDE_DEFS.format(headers = ""))      
+        f.write("\n{}".format(user_includes))
+
         f.write(self.CONST_DEFS)
-        f.write(user_consts)        
+        f.write("\n{}".format(user_consts))     
+
         f.write(self.TYPE_DEFS)
-        f.write("{}\n".format(self.triggers_enum))
-        f.write(user_types)
+        f.write(self.triggers_enum)
+        f.write("\n{}".format(user_types))
+
         f.write(self.GLOBAL_FUNCS_DECLS)
         f.write(self.global_func_decl);
+        f.write("\n{}".format(user_global_fcts_defs))
+
         f.write(self.HEADER_DEF_END.format(fsm_name = self.fsm_name.upper()))
 
         f.close()        
+
+    #convert given name from your_Type to YourType
+    @staticmethod
+    def _convert_to_c_type_name(name) :
+        upper = False
+        ret = ""
+        for c in name.capitalize() :
+            if c == "_" :
+                upper = True
+            elif upper :
+                ret = ret + c.upper()
+                upper = False
+            else :
+                ret = ret + c
+        return ret
 
     # generate function declaration, definitions, reference
     # returns a tuple of (function_declarations, functions_definitions, state_reference_action)
