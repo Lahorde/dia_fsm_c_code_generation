@@ -32,6 +32,10 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
 
     USER_CODE_BEGIN = "USER CODE BEGIN"
     USER_CODE_END = "USER CODE END"
+    FSM_OVERWRITTEN_CODE_BEGIN = "/** FSM OVERWRITTEN CODE BEGIN **/"
+    FSM_OVERWRITTEN_CODE_END = "/** FSM OVERWRITTEN CODE END **/"
+    FSM_OVERWRITING_USER_CODE_BEGIN = "/** FSM OVERWRITING USER CODE BEGIN **/"
+    FSM_OVERWRITING_USER_CODE_END = "/** FSM OVERWRITING USER CODE END **/"
 
     CODE_PREAMBLE = \
         "/******************************************************************************\n" + \
@@ -140,11 +144,16 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
         self.guard_defs = self.FSM_GUARDS_DEFS
         self.action_decls = self.FSM_ACTIONS_DEFS
         self.action_defs = self.FSM_ACTIONS_DEFS
-        self.state_enum = "typedef enum\n{\n"
+        self.state_enum = "typedef enum{\n"
 
     def begin_render (self, data, src_filename):
         self.src_filename = src_filename
         self.header_filename = "{}.h".format(os.path.splitext(self.src_filename)[0])
+        self.header_file = open(self.header_filename, "a+")
+        self.header_file_content = self.header_file.read()
+        self.src_file = open(self.src_filename, "a+")
+        self.src_file_content = self.src_file.read()
+
         r = re.search("(.+)_fsm.c", os.path.basename(self.src_filename))
         if r :
             self.fsm_name = r.groups()[0]
@@ -203,7 +212,7 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
                     trans_ref = "&guard_{}".format(i)
 
             action_trans_ref = "NULL"
-            trans_action_decl, trans_action_def, trans_action_ref = self._generate_function("void", "action_trans_{}".format(i), "void", transition.action)
+            trans_action_decl, trans_action_def, trans_action_ref = self._generate_action("void", "action_trans_{}".format(i), "void", transition.action)
 
             func_name = CFSMExporter._trans_action_already_defined(trans_action_def, self.action_defs)
             if func_name :
@@ -249,15 +258,15 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
             action_exit_ref = "NULL"
             action_in_ref = "NULL"
 
-            state_action_decl, state_action_def, action_enter_ref = self._generate_function("void", "action_enter_{}_state".format(key.lower()), "void", self.states[key].iaction)
+            state_action_decl, state_action_def, action_enter_ref = self._generate_action("void", "action_enter_{}_state".format(key.lower()), "void", self.states[key].iaction)
             self.action_decls = "{}{}".format(self.action_decls, state_action_decl)
             self.action_defs = "{}{}".format(self.action_defs, state_action_def)
 
-            state_action_decl, state_action_def, action_exit_ref = self._generate_function("void", "action_exit_{}_state".format(key.lower()), "void", self.states[key].oaction)
+            state_action_decl, state_action_def, action_exit_ref = self._generate_action("void", "action_exit_{}_state".format(key.lower()), "void", self.states[key].oaction)
             self.action_decls = "{}{}".format(self.action_decls, state_action_decl)
             self.action_defs = "{}{}".format(self.action_defs, state_action_def)
 
-            state_action_decl, state_action_def, action_in_ref = self._generate_function("void", "action_in_{}_state".format(key.lower()), "void", self.states[key].doaction)
+            state_action_decl, state_action_def, action_in_ref = self._generate_action("void", "action_in_{}_state".format(key.lower()), "void", self.states[key].doaction)
             self.action_decls = "{}{}".format(self.action_decls, state_action_decl)
             self.action_defs = "{}{}".format(self.action_defs, state_action_def)
 
@@ -279,83 +288,162 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
 
 
     def _write_c_file(self) :
-        f = open(self.src_filename, "a+")
+        user_includes = self._get_user_code("Includes")
+        user_consts = self._get_user_code("Consts")
+        user_types = self._get_user_code("Types")
+        user_static_vars = self._get_user_code("User Static Variables Declarations")
+        user_local_fcts_decls = self._get_user_code("User Local Functions Declarations")
+        user_global_fcts_defs = self._get_user_code("User Global Functions Definitions")
+        user_static_fcts_defs = self._get_user_code("User Static Functions Definitions")
 
-        file_content = f.read()
-        user_includes = CFSMExporter._get_user_code(file_content, "Includes")
-        user_consts = CFSMExporter._get_user_code(file_content, "Consts")
-        user_types = CFSMExporter._get_user_code(file_content, "Types")
-        user_static_vars = CFSMExporter._get_user_code(file_content, "User Static Variables Declarations")
-        user_local_fcts_decls = CFSMExporter._get_user_code(file_content, "User Local Functions Declarations")
-        user_global_fcts_defs = CFSMExporter._get_user_code(file_content, "User Global Functions Definitions")
-        user_static_fcts_defs = CFSMExporter._get_user_code(file_content, "User Static Functions Definitions")
-
-        f.truncate(0)
-        f.write(self.CODE_PREAMBLE.format(
+        self.src_file.truncate(0)
+        self.src_file.write(self.CODE_PREAMBLE.format(
             fsm_filename = os.path.basename(self.src_filename)))
-        f.write(self.INCLUDE_DEFS.format(
+        self.src_file.write(self.INCLUDE_DEFS.format(
             headers = "#include \"fsm.h\"\n#include \"{}\"\n#include <stddef.h>\n".format(os.path.basename(self.header_filename))))
-        f.write(user_includes)
+        self.src_file.write(user_includes)
 
-        f.write(self.CONST_DEFS)
-        f.write("{}\n".format(self.consts))
-        f.write(user_consts)   
+        self.src_file.write(self.CONST_DEFS)
+        self.src_file.write("{}\n".format(self.consts))
+        self.src_file.write(user_consts)   
 
-        f.write(self.TYPE_DEFS)
-        f.write(self.state_enum)
-        f.write("\n{}".format(user_types))
+        self.src_file.write(self.TYPE_DEFS)
+        self.src_file.write(self.state_enum)
+        self.src_file.write("\n{}".format(user_types))
 
-        f.write(self.STATIC_FUNCS_DECLS)
-        f.write(self.action_decls)
-        f.write("\n{}".format(self.guard_decls))
-        f.write("\n{}".format(user_local_fcts_decls))
+        self.src_file.write(self.STATIC_FUNCS_DECLS)
+        self.src_file.write(self.action_decls)
+        self.src_file.write("\n{}".format(self.guard_decls))
+        self.src_file.write("\n{}".format(user_local_fcts_decls))
 
-        f.write(self.STATIC_VARS)
-        f.write(self.static_vars);
-        f.write("\n{}".format(self.transitions_def))
-        f.write("\n{}".format(user_static_vars))
+        self.src_file.write(self.STATIC_VARS)
+        self.src_file.write(self.static_vars);
+        self.src_file.write("\n{}".format(self.transitions_def))
+        self.src_file.write("\n{}".format(user_static_vars))
 
-        f.write(self.GLOBAL_FUNCS_DEFS)
-        f.write(self.init_func_def)
-        f.write("\n{}".format(self.update_fsm_func_def))
-        f.write("\n{}".format(user_global_fcts_defs))
+        self.src_file.write(self.GLOBAL_FUNCS_DEFS)
+        self.src_file.write(self.init_func_def)
+        self.src_file.write("\n{}".format(self.update_fsm_func_def))
+        self.src_file.write("\n{}".format(user_global_fcts_defs))
 
-        f.write(self.STATIC_FUNCS_DEFS)
-        f.write(self.action_defs)
-        f.write("\n{}".format(self.guard_defs))
-        f.write("\n{}".format(user_static_fcts_defs))
+        self.src_file.write(self.STATIC_FUNCS_DEFS)
+        self.src_file.write(self.action_defs)
+        self.src_file.write("\n{}".format(self.guard_defs))
+        self.src_file.write("\n{}".format(user_static_fcts_defs))
 
-        f.close()
+        self.src_file.close()
 
-    def _write_h_file(self) :
-        f = open(self.header_filename, "a+")
-        
-        file_content = f.read()
-        user_includes = CFSMExporter._get_user_code(file_content, "Includes")
-        user_consts = CFSMExporter._get_user_code(file_content, "Consts")
-        user_types = CFSMExporter._get_user_code(file_content, "Types")
-        user_global_fcts_defs = CFSMExporter._get_user_code(file_content, "User Global Functions Declarations")
+    def _write_h_file(self) :        
+        user_includes = self._get_user_code("Includes")
+        user_consts = self._get_user_code("Consts")
+        user_types = self._get_user_code("Types")
+        user_global_fcts_defs = self._get_user_code("User Global Functions Declarations")
 
-        f.truncate(0)
-        f.write(self.CODE_PREAMBLE.format(fsm_filename = os.path.basename(self.header_filename)))
-        f.write(self.HEADER_DEF_BEGIN.format(fsm_name = self.fsm_name.upper()))
-        f.write(self.INCLUDE_DEFS.format(headers = ""))      
-        f.write("\n{}".format(user_includes))
+        self.header_file.truncate(0)
+        self.header_file.write(self.CODE_PREAMBLE.format(fsm_filename = os.path.basename(self.header_filename)))
+        self.header_file.write(self.HEADER_DEF_BEGIN.format(fsm_name = self.fsm_name.upper()))
+        self.header_file.write(self.INCLUDE_DEFS.format(headers = ""))      
+        self.header_file.write("{}".format(user_includes))
 
-        f.write(self.CONST_DEFS)
-        f.write("\n{}".format(user_consts))     
+        self.header_file.write(self.CONST_DEFS)
+        self.header_file.write("\n{}".format(user_consts))     
 
-        f.write(self.TYPE_DEFS)
-        f.write(self.triggers_enum)
-        f.write("\n{}".format(user_types))
+        self.header_file.write(self.TYPE_DEFS)
+        self.header_file.write(self.triggers_enum)
+        self.header_file.write("\n{}".format(user_types))
 
-        f.write(self.GLOBAL_FUNCS_DECLS)
-        f.write(self.global_func_decl);
-        f.write("\n{}".format(user_global_fcts_defs))
+        self.header_file.write(self.GLOBAL_FUNCS_DECLS)
+        self.header_file.write(self.global_func_decl);
+        self.header_file.write("\n{}".format(user_global_fcts_defs))
 
-        f.write(self.HEADER_DEF_END.format(fsm_name = self.fsm_name.upper()))
+        self.header_file.write(self.HEADER_DEF_END.format(fsm_name = self.fsm_name.upper()))
 
-        f.close()        
+        self.header_file.close()        
+
+    # checks if user overwritten generated code
+    # in this case, a comment with FSM model code is added
+    def _generate_action_def(self, model_action_raw_def, action_ret, action_name, action_args) :
+        action_def_proto = "{action_ret}\n{action_name}({action_args})".format(action_ret=action_ret, action_name=action_name, action_args=action_args)
+        action_def = "{action_def_proto}\n{{\n{action_body}}}\n\n"
+        model_action_body = ""
+
+        if len(model_action_raw_def) > 0 :
+            splitted_actions = model_action_raw_def.split(";")
+            splitted_actions = [action.strip() for action in splitted_actions]
+            for action in splitted_actions :
+                if len(action) > 0 :
+                    model_action_body = "{}    {};\n".format(model_action_body, action.strip())
+        try :
+            i = self.src_file_content.index("{}\n{{".format(action_def_proto))
+        except ValueError as e :
+            # function not defined before 
+            return action_def.format(action_def_proto=action_def_proto, action_body=model_action_body)
+
+        try :
+            j = self.src_file_content[i:].index("\n}\n")
+        except ValueError as e :    
+            raise Exception("Cannot find end of {} definition".format(action_name))
+
+        old_action_def = self.src_file_content[i:i+j+2]
+
+        try :
+            k = old_action_def.index("{{\n{}}}".format(model_action_body))
+            # FSM model code not overwritten
+            return action_def.format(action_def_proto=action_def_proto, action_body=model_action_body)
+
+        except ValueError as e :
+            # check if already overwriting FSM model code 
+            if CFSMExporter.FSM_OVERWRITING_USER_CODE_BEGIN in old_action_def :
+                overwriting_body = CFSMExporter._string_between(old_action_def, CFSMExporter.FSM_OVERWRITING_USER_CODE_BEGIN, "    {}".format(CFSMExporter.FSM_OVERWRITING_USER_CODE_END))
+            else :
+                overwriting_body = old_action_def[old_action_def.index("{")+1:-1]
+
+            # function definition overwritten, add a comment indicating 
+            # function model definition has been overwritten and add 
+            # commented model code followed by user code
+            old_action_def[old_action_def.index("{"):i+j+1]
+            action_body = "    {}\n    /*\n{}    */\n    {}".format(
+                CFSMExporter.FSM_OVERWRITTEN_CODE_BEGIN, 
+                model_action_body, 
+                CFSMExporter.FSM_OVERWRITTEN_CODE_END)
+
+            action_body = "{}\n\n    {}{}    {}\n".format(
+                action_body,
+                CFSMExporter.FSM_OVERWRITING_USER_CODE_BEGIN,
+                overwriting_body,
+                CFSMExporter.FSM_OVERWRITING_USER_CODE_END)
+
+            return action_def.format(action_def_proto=action_def_proto, action_body=action_body)
+
+    # generate function declaration, definitions, reference
+    # returns a tuple of (function_declarations, functions_definitions, state_reference_action)
+    def _generate_action(self, func_ret, func_name, func_args, model_action_raw_def) :
+        # reference on action function set in state variable
+        ref_action = "NULL"
+        action_decl = ""
+        action_def = ""
+        if len(model_action_raw_def) > 0 :
+            action_decl = "static {} {}({});\n".format(func_ret, func_name, func_args)
+            action_def = self._generate_action_def(model_action_raw_def, func_ret, func_name, func_args)
+            ref_action = "&{}".format(func_name)
+        return (action_decl, action_def, ref_action)
+
+    def _get_user_code(self, section_name) :
+        start_tag = "/** {} {} */\n".format(CFSMExporter.USER_CODE_BEGIN, section_name)
+        end_tag = "/** {} {} */\n".format(CFSMExporter.USER_CODE_END, section_name)
+        return "{}{}{}".format(
+                start_tag,
+                CFSMExporter._string_between(self.src_file_content, start_tag, end_tag),
+                end_tag)
+
+    @staticmethod
+    def _string_between(str, start_str, end_str) :
+        try :
+            i = str.index(start_str)
+            j = str.index(end_str)
+            return str[i+len(start_str):j]
+        except ValueError as e :
+            return ""
 
     #convert given name from your_Type to YourType
     @staticmethod
@@ -371,28 +459,6 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
             else :
                 ret = ret + c
         return ret
-
-    # generate function declaration, definitions, reference
-    # returns a tuple of (function_declarations, functions_definitions, state_reference_action)
-    @staticmethod
-    def _generate_function(func_ret, func_name, func_args, body) :
-        # reference on action function set in state variable
-        ref_action = "NULL"
-        action_decls = ""
-        action_defs = ""
-        if len(body) > 0 :
-            splitted_actions = body.split(";")
-            splitted_actions = [action.strip() for action in splitted_actions]
-            # several function calls, group it in function body 
-            action_decls = "static {} {}({});\n".format(func_ret, func_name, func_args)
-            action_defs = "{}\n{}({})\n{{\n".format(func_ret, func_name, func_args)
-            for action in splitted_actions :
-                if len(action) > 0 :
-                    action_defs = "{}    {};\n".format(action_defs, action.strip())
-            action_defs = "{}}}\n\n".format(action_defs)
-            ref_action = "&{}".format(func_name)
-        return (action_decls, action_defs, ref_action)
-
 
     @staticmethod
     def _guard_already_defined(func_body, func_defs) :
@@ -416,21 +482,6 @@ class CFSMExporter(uml_stm_export.SimpleSTM):
             if func_body in func_defs :
                 return re.findall("{}\n({})\({}\)\n".format(func_ret, func_name, func_params), func_defs[:func_defs.index(func_body)], re.DOTALL)[-1]
         return None
-
-
-    @staticmethod
-    def _get_user_code(content, section_name) :
-        start_tag = "/** {} {} */\n".format(CFSMExporter.USER_CODE_BEGIN, section_name)
-        end_tag = "/** {} {} */\n".format(CFSMExporter.USER_CODE_END, section_name)
-        try :
-            i = content.index(start_tag)
-            j = content.index(end_tag)
-            return content[i:j + len(end_tag)]
-        except ValueError as e :
-            return "{}{}".format(
-                start_tag,
-                end_tag)
-
 
 # dia-python keeps a reference to the renderer class and uses it on demand
 dia.register_export("State Machine C", "c", CFSMExporter())
