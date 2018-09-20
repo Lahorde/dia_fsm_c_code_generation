@@ -46,9 +46,9 @@ class Transition :
 
     def set_action(self, action):
         if action == "(NULL)":
-            self.iaction = ""
+            self.action = ""
         else :
-            self.iaction = action
+            self.action = action
 
     def set_trigger(self, trigger):
         self.trigger = trigger
